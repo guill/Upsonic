@@ -23,6 +23,7 @@ class Task(BaseModel):
     end_time: Optional[int] = None
     agent: Optional[Any] = None
     response_lang: Optional[str] = None
+    force_task_level: Optional[int] = None
 
 
 
@@ -40,6 +41,7 @@ class Task(BaseModel):
         end_time: Optional[int] = None,
         agent: Optional[Any] = None,
         response_lang: Optional[str] = None,
+        force_task_level: Optional[int] = None,
         **data
     ):
         if description is not None:
@@ -59,7 +61,8 @@ class Task(BaseModel):
             "start_time": start_time,
             "end_time": end_time,
             "agent": agent,
-            "response_lang": response_lang
+            "response_lang": response_lang,
+            "force_task_level": force_task_level,
         })
         
         super().__init__(**data)

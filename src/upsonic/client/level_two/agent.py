@@ -620,7 +620,7 @@ class Agent:
         task._response = result["result"]
         return task.response
 
-    async def multiple_async(self, agent_configuration: AgentConfiguration, task: Task, llm_model: str = None):
+    async def multiple_async(self, agent_configuration: AgentConfiguration, task: Task, llm_model: Optional[str] = None):
         """
         Asynchronous version of the multiple method.
         """
@@ -628,8 +628,10 @@ class Agent:
             system_prompt = "System prompt: " + agent_configuration.system_prompt
         else:
             system_prompt = None
-        # First, determine the mode of operation
-        mode_selection_prompt = f"""
+        task_level = task.force_task_level
+        if task_level is None:
+            # First, determine the mode of operation
+            mode_selection_prompt = f"""
 You are a Task Analysis AI that helps determine the best mode of task decomposition.
 
 Task Agent name: {agent_configuration.job_title}
@@ -672,21 +674,25 @@ Select the mode based on these characteristics.
 Prefer level_no_step when the task can be completed directly without any decomposition.
 Use Level One for any task requiring multiple steps or verification.
 """
-        mode_selector = Task(
-            description=mode_selection_prompt,
-            images=task.images,
-            response_format=AgentMode,
-            context=[task],
-            price_id_=task.price_id,
-            not_main_task=True
-        )
+            mode_selector = Task(
+                description=mode_selection_prompt,
+                images=task.images,
+                response_format=AgentMode,
+                context=[task],
+                price_id_=task.price_id,
+                not_main_task=True
+            )
+            
+            # Use Direct.do_async with the agent's retry setting
+            await Direct.do_async(mode_selector, llm_model, retry=agent_configuration.retry)
         
-        # Use Direct.do_async with the agent's retry setting
-        await Direct.do_async(mode_selector, llm_model, retry=agent_configuration.retry)
-        
-        # If level_no_step is selected, return just the end task
-        if mode_selector.response.selected_mode == "level_no_step":
-            return [Task(description=task.description, images=task.images, response_format=task.response_format, response_lang=task.response_lang, tools=task.tools, price_id_=task.price_id, not_main_task=True)]
+            # If level_no_step is selected, return just the end task
+            if mode_selector.response.selected_mode == "level_no_step":
+                task_level = 0
+            else:
+                task_level = 1
+        if task_level == 0:
+            return [Task(description=task.description, images=task.images, response_format=task.response_format, response_lang=task.response_lang, tools=task.tools, price_id_=task.price_id, not_main_task=True, force_task_level=task_level)]
 
         # Generate a list of sub tasks
         prompt = f"""
